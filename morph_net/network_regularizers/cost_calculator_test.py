@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+from absl.testing import parameterized
 from morph_net.framework import batch_norm_source_op_handler
 from morph_net.framework import concat_op_handler
 from morph_net.framework import grouping_op_handler
@@ -19,7 +20,7 @@ arg_scope = tf.contrib.framework.arg_scope
 layers = tf.contrib.layers
 
 
-class NetworkRegularizerTest(tf.test.TestCase):
+class CostCalculatorTest(parameterized.TestCase, tf.test.TestCase):
 
   def _batch_norm_scope(self):
     params = {
@@ -92,6 +93,24 @@ class NetworkRegularizerTest(tf.test.TestCase):
       queue.enqueue((non_image_tensor, image)).run()
       self.assertEqual(expected_cost,
                        calculator.get_cost([conv1_op]).eval())
+      # for 0/1 assigments cost and reg_term are equal:
+      self.assertEqual(expected_cost,
+                       calculator.get_regularization_term([conv1_op]).eval())
+
+  @parameterized.named_parameters(
+      ('_conv2d', 4, lambda x: layers.conv2d(x, 16, 3), 'Conv2D'),
+      ('_convt', 4, lambda x: layers.conv2d_transpose(x, 16, 3),
+       'conv2d_transpose'),
+      ('_conv2s', 4, lambda x: layers.separable_conv2d(x, None, 3),
+       'depthwise'),
+      ('_conv3d', 5, lambda x: layers.conv3d(x, 16, 3), 'Conv3D'))
+  def test_get_input_activation2(self, rank, fn, op_name):
+    g = tf.get_default_graph()
+    inputs = tf.zeros([6] * rank)
+    _ = fn(inputs)
+    self.assertEqual(
+        inputs,
+        cost_calculator.get_input_activation(g.get_operation_by_name(op_name)))
 
 
 if __name__ == '__main__':
